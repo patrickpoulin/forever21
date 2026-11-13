@@ -7,10 +7,10 @@ local UI = {}
 ns.UI = UI
 
 local MEDIA = "Interface\\AddOns\\" .. addonName .. "\\Media\\"
-local WIDTH, HEIGHT = 720, 480
+local WIDTH, HEIGHT = 640, 400
 local CARD_W, CARD_H = 40, 56
 local CARD_STEP = 16 -- how far each card overlaps the one before
-local SEAT_W, SEAT_H, SEAT_GAP = 134, 196, 6
+local SEAT_W, SEAT_H, SEAT_GAP = 118, 140, 6
 
 local SUIT_TEXTURE = { S = "SuitSpade", H = "SuitHeart", D = "SuitDiamond", C = "SuitClub" }
 local RED = { 0.78, 0.08, 0.1 }
@@ -165,27 +165,31 @@ local function CreateSeat(parent, index)
     s.ring = texture(s, "ARTWORK")
     s.ring:SetTexture(MEDIA .. "Ring")
     s.ring:SetVertexColor(1, 1, 1, 0.45)
-    s.ring:SetSize(30, 30)
-    s.ring:SetPoint("BOTTOM", 0, 6)
+    s.ring:SetSize(24, 24)
+    s.ring:SetPoint("BOTTOMRIGHT", -6, 6)
     s.chip = texture(s, "OVERLAY")
     s.chip:SetTexture(MEDIA .. "Chip")
-    s.chip:SetSize(26, 26)
+    s.chip:SetSize(20, 20)
     s.chip:SetPoint("CENTER", s.ring)
-    s.bet = text(s, "GameFontHighlightSmall", "LEFT", 6, 0, s.ring, "RIGHT")
+    s.bet = text(s, "GameFontHighlightSmall", "RIGHT", -4, 0, s.ring, "LEFT")
     return s
 end
 
--- Lays out up to 4 hands; split hands shrink so they fit in the seat.
+-- Lays out up to 4 hands; split hands shrink so they fit in the seat:
+-- two hands stack, three or four go in a 2 x 2 grid.
 local function ShowSeatHands(s, hands, current)
     local n = #hands
-    local scale = (n >= 3) and 0.6 or (n == 2 and 0.8 or 1)
+    local scale = (n >= 3) and 0.55 or (n == 2 and 0.65 or 1)
     local rowH = (CARD_H + 16) * scale
+    local colW = (SEAT_W - 8) / 2
     for h, frame in ipairs(s.hands) do
         local hand = hands[h]
         if hand then
             frame:SetScale(scale)
             frame:ClearAllPoints()
-            frame:SetPoint("TOPLEFT", s, "TOPLEFT", 10 / scale, (-40 - (h - 1) * rowH) / scale)
+            local row, col = h - 1, 0
+            if n >= 3 then row, col = math.floor((h - 1) / 2), (h - 1) % 2 end
+            frame:SetPoint("TOPLEFT", s, "TOPLEFT", (6 + col * colW) / scale, (-40 - row * rowH) / scale)
             ShowHand(frame, hand.cards)
             local marker = (current == h and n > 1) and "> " or ""
             frame.total:SetText(marker .. TotalText(hand.cards))
@@ -250,15 +254,15 @@ function UI:Create()
     SetCard(f.shoe, nil)
     f.shoeText = text(f, "GameFontDisableSmall", "TOP", 0, -4, f.shoe, "BOTTOM")
 
-    f.rules = text(f, "GameFontDisableSmall", "TOP", 0, -150)
+    f.rules = text(f, "GameFontDisableSmall", "TOP", 0, -142)
     f.rules:SetText("BLACKJACK PAYS 3 TO 2  -  DEALER STANDS ON ALL 17s  -  INSURANCE PAYS 2 TO 1")
-    f.status = text(f, "GameFontHighlight", "TOP", 0, -172)
+    f.status = text(f, "GameFontHighlight", "TOP", 0, -162)
 
     -- Result banner across the middle of the table.
     local banner = CreateFrame("Frame", nil, f)
     f.banner = banner
-    banner:SetSize(460, 64)
-    banner:SetPoint("TOP", 0, -134)
+    banner:SetSize(440, 60)
+    banner:SetPoint("TOP", 0, -132)
     banner:SetFrameLevel(f:GetFrameLevel() + 20)
     banner.bg = texture(banner, "BACKGROUND", 0, 0, 0, 0.78)
     banner.bg:SetAllPoints()
