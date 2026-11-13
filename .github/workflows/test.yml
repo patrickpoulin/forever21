@@ -1,0 +1,20 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1, busted and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 lua-busted lua-check
+      - name: Lint
+        run: luacheck .
+      - name: Test
+        run: busted
