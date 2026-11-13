@@ -1,8 +1,15 @@
--- Commands.lua: /f21 slash commands and chat output for solo play.
+-- Commands.lua: game actions shared by the window and /f21, plus chat output.
 local _, ns = ...
 local Cards = ns.Cards
 
-local game -- the Game this client is running, if any
+-- Anything that wants game events (chat output, the table window) listens here.
+ns.listeners = {}
+function ns.Listen(fn)
+    ns.listeners[#ns.listeners + 1] = fn
+end
+local function dispatch(event, data)
+    for _, fn in ipairs(ns.listeners) do fn(event, data) end
+end
 
 local function cardList(cards)
     local out = {}
@@ -22,12 +29,25 @@ local RESULT_WORDS = {
     win = "win", lose = "lose", push = "push", blackjack = "blackjack!",
 }
 
--- Turns game events into chat lines. Later the table window listens too.
+-- Stats are kept whether or not chat output is on.
+ns.Listen(function(event, d)
+    local c = ns.charDB
+    if event == "started" then
+        c.gamesPlayed = c.gamesPlayed + 1
+    elseif event == "result" and d.name == ns.PlayerName() then
+        c.handsPlayed = c.handsPlayed + #d.hands
+    elseif event == "over" and d.winner and d.winner == ns.PlayerName() then
+        c.gamesWon = c.gamesWon + 1
+    end
+end)
+
+-- Turns game events into chat lines. On by default; /f21 chat toggles it.
 local function onEvent(event, d)
+    if ns.db and ns.db.chat == false then return end
+    local game = ns.game
     local P = ns.Print
     if event == "started" then
         P(("Game started. Everyone has %d chips. Bet with /f21 bet <2-24, even>."):format(d.chips))
-        ns.charDB.gamesPlayed = ns.charDB.gamesPlayed + 1
     elseif event == "shuffled" then
         P("The dealer shuffles the shoe.")
     elseif event == "betting" then
@@ -67,7 +87,6 @@ local function onEvent(event, d)
         for i, r in ipairs(d.hands) do
             local label = #d.hands > 1 and (" hand %d"):format(i) or ""
             P(("%s%s: %s (%d), gets back %d."):format(d.name, label, RESULT_WORDS[r.result], r.total, r.payout))
-            if d.name == ns.PlayerName() then ns.charDB.handsPlayed = ns.charDB.handsPlayed + 1 end
         end
         if d.insurancePaid > 0 then P(("%s's insurance pays %d."):format(d.name, d.insurancePaid)) end
         P(("%s now has %d chips."):format(d.name, d.chips))
@@ -78,7 +97,6 @@ local function onEvent(event, d)
     elseif event == "over" then
         if d.winner then
             P(d.winner .. " wins the game!")
-            if d.winner == ns.PlayerName() then ns.charDB.gamesWon = ns.charDB.gamesWon + 1 end
         elseif d.reason == "closed" then
             P("The table was closed.")
         else
@@ -87,66 +105,106 @@ local function onEvent(event, d)
     end
 end
 
-local function startSolo()
-    if game and game.phase ~= "over" then
-        ns.Print("A game is already running. /f21 quit to leave it.")
-        return
-    end
-    game = ns.Game.New({ onEvent = onEvent })
-    game:AddPlayer(ns.PlayerName())
-    game:Start()
+ns.Listen(onEvent)
+
+---------------------------------------------------------------------------
+-- Actions. Each returns true, or nil plus a reason a player can read.
+---------------------------------------------------------------------------
+
+function ns.IsPlaying()
+    return ns.game ~= nil and ns.game.phase ~= "over"
 end
+
+function ns.StartSolo()
+    if ns.IsPlaying() then return nil, "A game is already running. Quit it first." end
+    ns.game = ns.Game.New({ onEvent = dispatch })
+    ns.game:AddPlayer(ns.PlayerName())
+    dispatch("newGame", {})
+    return ns.game:Start()
+end
+
+local function needGame()
+    if not ns.IsPlaying() then return nil, "No game running. Start one with /f21 solo." end
+    return true
+end
+
+-- Places the bet and deals once every seated player has bet.
+function ns.Bet(amount)
+    local ok, err = needGame()
+    if not ok then return nil, err end
+    ok, err = ns.game:PlaceBet(ns.PlayerName(), amount)
+    if not ok then return nil, err end
+    if ns.game:AllBetsIn() then return ns.game:Deal() end
+    return true
+end
+
+function ns.Act(action)
+    local ok, err = needGame()
+    if not ok then return nil, err end
+    return ns.game:Act(ns.PlayerName(), action)
+end
+
+function ns.Insure(take)
+    local ok, err = needGame()
+    if not ok then return nil, err end
+    return ns.game:Insure(ns.PlayerName(), take)
+end
+
+function ns.Quit()
+    local ok, err = needGame()
+    if not ok then return nil, err end
+    return ns.game:RemovePlayer(ns.PlayerName())
+end
+
+function ns.MySeat()
+    return ns.game and ns.game:FindSeat(ns.PlayerName())
+end
+
+---------------------------------------------------------------------------
+-- Slash commands
+---------------------------------------------------------------------------
 
 local function report(ok, err)
     if not ok and err then ns.Print("|cffff5555" .. err .. "|r") end
 end
 
-local function needGame()
-    if not game or game.phase == "over" then
-        ns.Print("No game running. Start one with /f21 solo.")
-        return false
-    end
-    return true
-end
-
 local HELP = {
+    "/f21 - show or hide the table window",
     "/f21 solo - play a solo game against the dealer",
     "/f21 bet <amount> - bet an even amount from 2 to 24",
     "/f21 hit, stand, double, split - play your hand",
     "/f21 insure, noinsure - answer the insurance offer",
     "/f21 chips - show your chips",
     "/f21 quit - leave the game",
+    "/f21 chat - turn chat messages on or off",
     "/f21 stats - your games and hands played",
     "/f21 api - check which addon-message API this client has",
 }
 
 local handlers = {}
 
-handlers.solo = startSolo
-handlers.bet = function(arg)
-    if not needGame() then return end
-    local ok, err = game:PlaceBet(ns.PlayerName(), tonumber(arg))
-    report(ok, err)
-    if ok and game:AllBetsIn() then report(game:Deal()) end
+handlers[""] = function()
+    if ns.UI then ns.UI:Toggle() else handlers.help() end
 end
+handlers.solo = function()
+    report(ns.StartSolo())
+    if ns.UI then ns.UI:Show() end
+end
+handlers.bet = function(arg) report(ns.Bet(tonumber(arg))) end
 for _, action in ipairs({ "hit", "stand", "double", "split" }) do
-    handlers[action] = function()
-        if needGame() then report(game:Act(ns.PlayerName(), action)) end
-    end
+    handlers[action] = function() report(ns.Act(action)) end
 end
-handlers.insure = function()
-    if needGame() then report(game:Insure(ns.PlayerName(), true)) end
-end
-handlers.noinsure = function()
-    if needGame() then report(game:Insure(ns.PlayerName(), false)) end
-end
+handlers.insure = function() report(ns.Insure(true)) end
+handlers.noinsure = function() report(ns.Insure(false)) end
 handlers.chips = function()
-    if not needGame() then return end
-    local seat = game:FindSeat(ns.PlayerName())
-    ns.Print(("You have %d chips."):format(seat and seat.chips or 0))
+    local seat = ns.MySeat()
+    if not ns.IsPlaying() or not seat then return report(needGame()) end
+    ns.Print(("You have %d chips."):format(seat.chips))
 end
-handlers.quit = function()
-    if needGame() then report(game:RemovePlayer(ns.PlayerName())) end
+handlers.quit = function() report(ns.Quit()) end
+handlers.chat = function()
+    ns.db.chat = not ns.db.chat
+    ns.Print("Chat messages " .. (ns.db.chat and "on." or "off."))
 end
 handlers.stats = function()
     local c = ns.charDB
