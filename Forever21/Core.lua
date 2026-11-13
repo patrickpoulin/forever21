@@ -1,7 +1,7 @@
 -- Core.lua: addon setup, saved data, and small helpers that touch the game API.
 local addonName, ns = ...
 
-ns.VERSION = "0.4.0"
+ns.VERSION = "0.4.1"
 ns.PREFIX = "F21BJ" -- addon message prefix
 
 local DB_DEFAULTS = {

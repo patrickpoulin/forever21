@@ -17,12 +17,6 @@ local RED = { 0.78, 0.08, 0.1 }
 local BLACK = { 0.08, 0.08, 0.1 }
 local GOLD = { 1, 0.82, 0.2 }
 
-local CHIPS = {
-    { value = 2, color = { 0.95, 0.95, 0.95 } },
-    { value = 4, color = { 0.85, 0.15, 0.15 } },
-    { value = 10, color = { 0.2, 0.4, 0.9 } },
-}
-
 local RESULT_TEXT = {
     win = "|cff40ff40WIN|r", lose = "|cffff4040LOSE|r", push = "|cffffff80PUSH|r",
     blackjack = "|cffffd040BLACKJACK|r",
@@ -282,25 +276,30 @@ function UI:Create()
     for i = 1, ns.Rules.DEFAULTS.maxSeats do f.seats[i] = CreateSeat(f, i) end
 
     -- Bottom bar: chips and bet on the left, actions on the right.
-    f.chipButtons = {}
-    for i, chip in ipairs(CHIPS) do
-        local b = CreateFrame("Button", nil, f)
-        b:SetSize(34, 34)
-        b:SetPoint("BOTTOMLEFT", 16 + (i - 1) * 38, 18)
-        b:SetNormalTexture(MEDIA .. "Chip")
-        b:GetNormalTexture():SetVertexColor(chip.color[1], chip.color[2], chip.color[3])
-        b:SetHighlightTexture(MEDIA .. "Ring", "ADD")
-        local label = text(b, "GameFontNormalSmall", "CENTER", 0, 0)
-        label:SetText(chip.value)
-        label:SetTextColor(0, 0, 0)
-        b:SetScript("OnClick", function() UI:AddToBet(chip.value) end)
-        f.chipButtons[i] = b
-    end
-    f.pending = text(f, "GameFontHighlight", "BOTTOMLEFT", 136, 27)
-    f.clearBet = button(f, "Clear", 56, function() UI:ClearBet() end)
-    f.clearBet:SetPoint("BOTTOMLEFT", 196, 22)
-    f.placeBet = button(f, "Bet", 64, function() UI:PlaceBet() end)
-    f.placeBet:SetPoint("LEFT", f.clearBet, "RIGHT", 4, 0)
+    -- Bet: [-] [ 10 ] [+] [Max] [Place Bet]. Steps by 2; the box can be typed in.
+    f.betLabel = text(f, "GameFontNormal", "BOTTOMLEFT", 20, 28)
+    f.betLabel:SetText("Bet")
+    f.betDown = button(f, "-", 26, function() UI:StepBet(-1) end)
+    f.betDown:SetPoint("BOTTOMLEFT", 52, 22)
+    f.betBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    f.betBox:SetSize(36, 22)
+    f.betBox:SetPoint("LEFT", f.betDown, "RIGHT", 10, 0)
+    f.betBox:SetAutoFocus(false)
+    f.betBox:SetNumeric(true)
+    f.betBox:SetMaxLetters(2)
+    f.betBox:SetJustifyH("CENTER")
+    f.betBox:SetScript("OnEnterPressed", function(box)
+        UI:SetBet(tonumber(box:GetText()))
+        box:ClearFocus()
+    end)
+    f.betBox:SetScript("OnEditFocusLost", function(box) UI:SetBet(tonumber(box:GetText())) end)
+    f.betBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+    f.betUp = button(f, "+", 26, function() UI:StepBet(1) end)
+    f.betUp:SetPoint("LEFT", f.betBox, "RIGHT", 8, 0)
+    f.betMax = button(f, "Max", 44, function() UI:SetBet(UI:MaxBet()) end)
+    f.betMax:SetPoint("LEFT", f.betUp, "RIGHT", 4, 0)
+    f.placeBet = button(f, "Place Bet", 80, function() UI:PlaceBet() end)
+    f.placeBet:SetPoint("LEFT", f.betMax, "RIGHT", 10, 0)
 
     f.actions = {}
     local prev
@@ -387,14 +386,21 @@ function UI:MaxBet()
     return max
 end
 
-function UI:AddToBet(value)
-    self.pending = math.min((self.pending or 0) + value, self:MaxBet())
+function UI:MinBet()
+    return ns.game and ns.game.rules.minBet or ns.Rules.DEFAULTS.minBet
+end
+
+-- Sets the bet, rounded down to an even number and kept between min and max.
+function UI:SetBet(value)
+    value = math.floor(tonumber(value) or self.pending or 0)
+    value = value - value % 2
+    self.pending = math.max(self:MinBet(), math.min(value, self:MaxBet()))
     self:Refresh()
 end
 
-function UI:ClearBet()
-    self.pending = 0
-    self:Refresh()
+-- Raises (1) or lowers (-1) the bet by one step of 2 chips.
+function UI:StepBet(dir)
+    self:SetBet((self.pending or 0) + dir * 2)
 end
 
 function UI:PlaceBet()
@@ -652,11 +658,13 @@ function UI:Refresh()
 
     -- Bet controls
     local canBet = playing and game.phase == "betting" and mySeat and not mySeat.out and mySeat.bet == 0
-    if canBet then self.pending = math.min(self.pending or 0, self:MaxBet()) end
-    for _, b in ipairs(f.chipButtons) do b:SetShown(canBet) end
-    f.pending:SetShown(canBet)
-    f.pending:SetText(("Bet: %d"):format(self.pending or 0))
-    f.clearBet:SetShown(canBet)
+    if canBet then self.pending = math.max(self:MinBet(), math.min(self.pending or 0, self:MaxBet())) end
+    for _, w in ipairs({ f.betLabel, f.betDown, f.betBox, f.betUp, f.betMax }) do w:SetShown(canBet) end
+    if canBet and not f.betBox:HasFocus() then f.betBox:SetText(tostring(self.pending or 0)) end
+    local pending, maxBet = self.pending or 0, self:MaxBet()
+    f.betDown:SetEnabled(canBet and pending > self:MinBet())
+    f.betUp:SetEnabled(canBet and pending < maxBet)
+    f.betMax:SetEnabled(canBet and pending < maxBet)
     f.placeBet:SetShown(canBet)
     f.placeBet:SetEnabled(canBet and (self.pending or 0) >= (game and game.rules.minBet or 2))
 
