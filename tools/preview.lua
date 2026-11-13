@@ -5,7 +5,7 @@ local W = require("tools.wowstub")
 W.install(_G)
 
 local ns = {}
-for _, f in ipairs({ "Cards.lua", "Rules.lua", "Game.lua", "Core.lua", "Commands.lua", "UI.lua" }) do
+for _, f in ipairs(W.TocFiles()) do
     assert(loadfile("Forever21/" .. f))("Forever21", ns)
 end
 -- Fire ADDON_LOADED on Core's event frame.
@@ -87,4 +87,11 @@ stack(ns.game, { "9S", "TD", "4C", "AH", "9D", "8C", "7S", "KH" })
 ns.game:PlaceBet("Thrall", 10); ns.game:PlaceBet("Jaina", 6)
 ns.UI.frame.placeBet:Click()
 dump("4-insurance")
+-- 5: a fresh solo game where Patrick busts.
+ns.game:Close()
+ns.UI.frame.newGame:Click()
+stack(ns.game, { "TS", "9C", "6H", "TD", "KS" })
+ns.UI.frame.placeBet:Click()
+ns.UI.frame.actions.hit:Click()
+dump("5-bust")
 print("wrote previews to " .. outdir)

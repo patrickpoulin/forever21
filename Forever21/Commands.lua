@@ -176,6 +176,7 @@ local HELP = {
     "/f21 insure, noinsure - answer the insurance offer",
     "/f21 chips - show your chips",
     "/f21 quit - leave the game",
+    "/f21 sound - turn sound effects on or off",
     "/f21 chat - turn chat messages on or off",
     "/f21 stats - your games and hands played",
     "/f21 api - check which addon-message API this client has",
@@ -202,6 +203,11 @@ handlers.chips = function()
     ns.Print(("You have %d chips."):format(seat.chips))
 end
 handlers.quit = function() report(ns.Quit()) end
+handlers.sound = function()
+    ns.db.sound = not ns.db.sound
+    ns.Print("Sound effects " .. (ns.db.sound and "on." or "off."))
+    if ns.UI then ns.UI:Refresh() end
+end
 handlers.chat = function()
     ns.db.chat = not ns.db.chat
     ns.Print("Chat messages " .. (ns.db.chat and "on." or "off."))

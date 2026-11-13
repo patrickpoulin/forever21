@@ -6,7 +6,7 @@ local W = require("tools.wowstub")
 local function loadAddon()
     W.install(_G)
     local ns = {}
-    for _, f in ipairs({ "Cards.lua", "Rules.lua", "Game.lua", "Core.lua", "Commands.lua", "UI.lua" }) do
+    for _, f in ipairs(W.TocFiles()) do
         assert(loadfile("Forever21/" .. f))("Forever21", ns)
     end
     for _, c in ipairs(W.UIParent.children) do
@@ -48,7 +48,31 @@ describe("Table window", function()
         assert.equal("betting", ns.game.phase)
         assert.equal("You win 12.", f.status:GetText())
         assert.equal(112, ns.MySeat().chips)
+        assert.is_true(f.banner:IsShown())
+        assert.equal("YOU WIN!", f.banner.title:GetText())
+        assert.equal("+12 chips", f.banner.sub:GetText())
+        assert.is_true(f.seats[1].glow:IsShown())
+        assert.truthy(#W.played > 0) -- sound effects fired
+
+        -- The banner clears on the next deal.
+        stack(ns.game, { "TS", "7C", "6H", "TD", "KS" })
+        f.placeBet:Click()
+        assert.is_false(f.banner:IsShown())
+        f.actions.hit:Click() -- 26: bust
+        assert.equal("BUST - YOU LOSE", f.banner.title:GetText())
         W.Layout() -- every anchor resolves
+    end)
+
+    it("turns sound off", function()
+        local ns = loadAddon()
+        ns.UI:Show()
+        ns.UI.frame.soundToggle:Click()
+        assert.is_false(ns.db.sound)
+        assert.equal("Sound: Off", ns.UI.frame.soundToggle:GetText())
+        W.played = {}
+        ns.UI.frame.newGame:Click()
+        ns.UI.frame.placeBet:Click()
+        assert.equal(0, #W.played)
     end)
 
     it("caps the bet at what you have", function()

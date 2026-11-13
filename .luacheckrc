@@ -10,7 +10,7 @@ globals = {
 }
 read_globals = {
     "C_ChatInfo", "SendAddonMessage", "CreateFrame", "UnitName", "DEFAULT_CHAT_FRAME",
-    "UIParent", "UISpecialFrames", "tinsert",
+    "UIParent", "UISpecialFrames", "tinsert", "PlaySound", "SOUNDKIT",
 }
 
 files["spec/"] = { std = "+busted" }

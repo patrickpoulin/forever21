@@ -6,11 +6,11 @@ local regions = {}
 local LAYERS = { BACKGROUND = 1, BORDER = 2, ARTWORK = 3, OVERLAY = 4, HIGHLIGHT = 5 }
 local FONT_SIZES = {
     GameFontNormal = 12, GameFontNormalSmall = 10, GameFontNormalLarge = 16,
-    GameFontHighlight = 12, GameFontHighlightSmall = 10, GameFontDisableSmall = 10,
+    GameFontNormalHuge = 22, GameFontHighlight = 12, GameFontHighlightSmall = 10, GameFontDisableSmall = 10,
 }
 local FONT_COLORS = {
     GameFontNormal = { 1, 0.82, 0 }, GameFontNormalSmall = { 1, 0.82, 0 }, GameFontNormalLarge = { 1, 0.82, 0 },
-    GameFontHighlight = { 1, 1, 1 }, GameFontHighlightSmall = { 1, 1, 1 }, GameFontDisableSmall = { 0.5, 0.5, 0.5 },
+    GameFontNormalHuge = { 1, 0.82, 0 }, GameFontHighlight = { 1, 1, 1 }, GameFontHighlightSmall = { 1, 1, 1 }, GameFontDisableSmall = { 0.5, 0.5, 0.5 },
 }
 
 local Region = {}
@@ -143,6 +143,13 @@ rectOf = function(r)
         pts[p] = { ax + a.x * s, ay + a.y * s }
     end
     local rect
+    local tl, br = pts.TOPLEFT, pts.BOTTOMRIGHT
+    if pts.TOPLEFT and pts.TOPRIGHT then
+        tl, br = pts.TOPLEFT, { pts.TOPRIGHT[1], pts.TOPRIGHT[2] - h }
+    elseif pts.BOTTOMLEFT and pts.BOTTOMRIGHT then
+        tl, br = { pts.BOTTOMLEFT[1], pts.BOTTOMLEFT[2] + h }, pts.BOTTOMRIGHT
+    end
+    pts.TOPLEFT, pts.BOTTOMRIGHT = tl, br
     if pts.TOPLEFT and pts.BOTTOMRIGHT then
         rect = { pts.TOPLEFT[1], pts.BOTTOMRIGHT[2], pts.BOTTOMRIGHT[1] - pts.TOPLEFT[1], pts.TOPLEFT[2] - pts.BOTTOMRIGHT[2] }
     else
@@ -194,6 +201,16 @@ function W.Layout()
     return out
 end
 
+-- The addon's Lua files, in the order the TOC loads them.
+function W.TocFiles()
+    local files = {}
+    for line in io.lines("Forever21/Forever21.toc") do
+        local f = line:match("^([%w_/]+%.lua)%s*$")
+        if f then files[#files + 1] = f end
+    end
+    return files
+end
+
 function W.install(env)
     env.CreateFrame = W.CreateFrame
     env.UIParent = W.UIParent
@@ -202,6 +219,10 @@ function W.install(env)
     env.SlashCmdList = {}
     env.UnitName = function() return "Patrick" end
     env.DEFAULT_CHAT_FRAME = { AddMessage = function() end }
+    env.SOUNDKIT = { IG_ABILITY_PAGE_TURN = 836, LOOT_WINDOW_COIN_SOUND = 120, IG_QUEST_LIST_COMPLETE = 878,
+        IG_QUEST_FAILED = 847, IG_CHARACTER_INFO_TAB = 841 }
+    W.played = {}
+    env.PlaySound = function(id) W.played[#W.played + 1] = id end
     env.C_ChatInfo = { SendAddonMessage = function() end, RegisterAddonMessagePrefix = function() end }
 end
 
