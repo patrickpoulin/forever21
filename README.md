@@ -4,9 +4,13 @@ Blackjack for WoW Forever. Up to 5 players sit at a table and play against a dea
 
 Built for WoW Forever 1.60.1 (addon interface 16001).
 
+![Table window preview](docs/table-preview.png)
+
+_Approximate render from `tools/preview.lua`; fonts and buttons look like WoW's own in game._
+
 ## Status
 
-Milestone 1 of 5: the rules engine and solo play from chat commands. The table window, invites, and multiplayer come in later milestones. See the design plan for the full roadmap.
+Milestone 2 of 5: the table window and solo play against the dealer. Invites and multiplayer come in milestone 3.
 
 ## Install
 
@@ -25,14 +29,20 @@ WowUp installs the latest GitHub release. A new release is published automatical
 
 ## Play solo
 
+Type `/f21` to open the table window and press **New Game**. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. Drag the window to move it; Escape closes it.
+
+Everything also works from chat:
+
 | Command | What it does |
 | --- | --- |
+| `/f21` | Show or hide the table window |
 | `/f21 solo` | Start a solo game with 100 chips |
 | `/f21 bet <amount>` | Bet an even amount from 2 to 24 |
 | `/f21 hit`, `/f21 stand`, `/f21 double`, `/f21 split` | Play your hand |
 | `/f21 insure`, `/f21 noinsure` | Answer the insurance offer when the dealer shows an ace |
 | `/f21 chips` | Show your chips |
 | `/f21 quit` | Leave the game |
+| `/f21 chat` | Turn the chat messages on or off |
 | `/f21 stats` | Your games and hands played |
 | `/f21 api` | Show the version and which addon-message API this client has |
 
@@ -52,4 +62,12 @@ busted        # run the tests in spec/
 luacheck .    # lint
 ```
 
-GitHub Actions runs both on every push and pull request.
+GitHub Actions runs both on every push and pull request. `spec/ui_spec.lua` loads the whole addon on a stubbed game API (`tools/wowstub.lua`) and plays a round through the window's buttons.
+
+To render approximate screenshots of the window outside the game:
+
+```sh
+lua5.1 tools/preview.lua /tmp/preview && python3 tools/render_preview.py /tmp/preview
+```
+
+Card suit and chip textures are drawn by `tools/make_media.py` (needs Pillow).
