@@ -1,0 +1,67 @@
+name: Release
+
+# Publishes a GitHub release (the zip WowUp installs) whenever main has a
+# version in the TOC that hasn't been released yet. Bump "## Version:" in
+# Forever21/Forever21.toc to ship a new release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and interface from the TOC
+        id: toc
+        run: |
+          version="v$(grep -m1 '^## Version:' Forever21/Forever21.toc | sed 's/^## Version: *//' | tr -d '\r')"
+          interface="$(grep -m1 '^## Interface:' Forever21/Forever21.toc | sed 's/^## Interface: *//' | tr -d '\r')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "interface=$interface" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.toc.outputs.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the zip and release.json
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          version="${{ steps.toc.outputs.version }}"
+          zip -qr "Forever21-$version.zip" Forever21
+          cat > release.json <<JSON
+          {
+            "releases": [
+              {
+                "name": "Forever21",
+                "version": "$version",
+                "filename": "Forever21-$version.zip",
+                "nolib": false,
+                "metadata": [
+                  { "flavor": "classic", "interface": ${{ steps.toc.outputs.interface }} }
+                ]
+              }
+            ]
+          }
+          JSON
+
+      - name: Publish the release
+        if: steps.check.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.toc.outputs.version }}"
+          gh release create "$version" "Forever21-$version.zip" release.json \
+            --target "$GITHUB_SHA" \
+            --title "Forever21 $version" \
+            --generate-notes
