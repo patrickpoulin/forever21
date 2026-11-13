@@ -61,6 +61,7 @@ function Game:Start()
     if self.phase ~= "lobby" then return nil, "The game has already started." end
     if #self.seats == 0 then return nil, "Nobody is seated." end
     self.startedWith = #self.seats
+    self.lastRound = nil
     for _, seat in ipairs(self.seats) do
         seat.chips = self.rules.startingChips
     end
@@ -160,7 +161,9 @@ end
 function Game:DrawDealer(hidden)
     local card = Cards.Draw(self.shoe)
     self.dealer.cards[#self.dealer.cards + 1] = card
-    self:Emit("dealerCard", { card = (not hidden) and card or nil, hidden = hidden or false })
+    self:Emit("dealerCard", {
+        card = (not hidden) and card or nil, hidden = hidden or false, index = #self.dealer.cards,
+    })
     return card
 end
 
@@ -181,6 +184,7 @@ function Game:Deal()
     for _, seat in ipairs(bettors) do
         seat.hands = { { cards = {}, bet = seat.bet } }
     end
+    self.lastRound = nil
     self:Emit("dealing", { round = self.round })
     for pass = 1, 2 do
         for _, seat in ipairs(bettors) do self:DrawTo(seat, 1) end
@@ -277,6 +281,10 @@ function Game:NextTurn()
     end
     self.current = nil
     self:DealerPlay()
+end
+
+function Game:CardsLeft()
+    return #self.shoe.cards - self.shoe.pos + 1
 end
 
 function Game:CurrentHand()
@@ -399,6 +407,10 @@ function Game:Settle(dealerBlackjack)
     local rules = self.rules
     local dealerTotal = Cards.Total(self.dealer.cards)
     local dealerBust = dealerTotal > 21
+    -- What was on the table, kept so the finished round can still be shown
+    -- after betting reopens.
+    local last = { dealer = {}, seats = {}, nets = {} }
+    for i, c in ipairs(self.dealer.cards) do last.dealer[i] = c end
 
     for _, seat in ipairs(self.seats) do
         if #seat.hands > 0 and not seat.left then
@@ -431,12 +443,31 @@ function Game:Settle(dealerBlackjack)
                     seat.chips = seat.chips + insurance
                 end
             end
+            local net = insurance - (seat.insurance or 0)
+            for _, hand in ipairs(seat.hands) do
+                net = net + hand.payout - hand.bet
+            end
+            last.nets[seat.name] = net
             self:Emit("result", {
                 name = seat.name, hands = results, chips = seat.chips,
                 insurance = seat.insurance or 0, insurancePaid = insurance,
             })
         end
     end
+    for i, seat in ipairs(self.seats) do
+        local hands = {}
+        if not seat.left then
+            for h, hand in ipairs(seat.hands) do
+                local cards = {}
+                for k, c in ipairs(hand.cards) do cards[k] = c end
+                hands[h] = {
+                    cards = cards, bet = hand.bet, result = hand.result, payout = hand.payout, bust = hand.bust,
+                }
+            end
+        end
+        last.seats[i] = hands
+    end
+    self.lastRound = last
 
     for _, seat in ipairs(self:ActiveSeats()) do
         if not Rules.CanPlay(rules, seat.chips) then

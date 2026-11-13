@@ -2,14 +2,17 @@
 ## Title: Forever21
 ## Notes: Blackjack with other players against a dealer run by the addon.
 ## Author: Patrick
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: Forever21DB
 ## SavedVariablesPerCharacter: Forever21CharDB
 
 Cards.lua
 Rules.lua
 Game.lua
+Serialize.lua
 Core.lua
 Commands.lua
+Net.lua
+Table.lua
 Sound.lua
 UI.lua

@@ -6,11 +6,12 @@ exclude_files = { ".luarocks", "lua_modules" }
 -- Game API names the addon reads or writes.
 globals = {
     "Forever21DB", "Forever21CharDB",
-    "SlashCmdList", "SLASH_FOREVER211", "SLASH_FOREVER212",
+    "SlashCmdList", "SLASH_FOREVER211", "SLASH_FOREVER212", "StaticPopupDialogs",
 }
 read_globals = {
     "C_ChatInfo", "SendAddonMessage", "CreateFrame", "UnitName", "DEFAULT_CHAT_FRAME",
     "UIParent", "UISpecialFrames", "tinsert", "PlaySound", "SOUNDKIT",
+    "GetTime", "C_Timer", "UnitExists", "StaticPopup_Show", "ACCEPT", "DECLINE",
 }
 
 files["spec/"] = { std = "+busted" }

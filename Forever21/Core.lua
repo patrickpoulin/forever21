@@ -1,8 +1,8 @@
 -- Core.lua: addon setup, saved data, and small helpers that touch the game API.
 local addonName, ns = ...
 
-ns.VERSION = "0.3.0"
-ns.PREFIX = "F21BJ" -- addon message prefix, used from milestone 3
+ns.VERSION = "0.4.0"
+ns.PREFIX = "F21BJ" -- addon message prefix
 
 local DB_DEFAULTS = {
     sound = true,

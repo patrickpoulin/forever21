@@ -2,19 +2,6 @@
 -- Usage (repo root): lua5.1 tools/preview.lua <outdir> && python3 tools/render_preview.py <outdir>
 package.path = "./?.lua;" .. package.path
 local W = require("tools.wowstub")
-W.install(_G)
-
-local ns = {}
-for _, f in ipairs(W.TocFiles()) do
-    assert(loadfile("Forever21/" .. f))("Forever21", ns)
-end
--- Fire ADDON_LOADED on Core's event frame.
-for _, r in ipairs({ W.UIParent }) do
-    for _, c in ipairs(r.children) do
-        if c.scripts and c.scripts.OnEvent then c.scripts.OnEvent(c, "ADDON_LOADED", "Forever21") end
-    end
-end
-assert(ns.db, "saved variables not set up")
 
 local outdir = arg[1] or "."
 
@@ -37,14 +24,14 @@ local function json(v)
     return "null"
 end
 
-local function dump(name)
+local function dump(player, name)
     local items = {}
-    for _, it in ipairs(W.Layout()) do
+    for _, it in ipairs(player:Layout()) do
         local r = it.r
         items[#items + 1] = {
             kind = r.kind, rect = it.rect, fill = r.fill, path = r.path, tint = r.tint,
             text = r.kind == "FontString" and r.text or nil, color = r.color, font = r.font,
-            button = r.button, close = r.closeButton, enabled = r.enabled,
+            button = r.button, close = r.closeButton, input = r.template == "InputBoxTemplate" or nil, enabled = r.enabled,
         }
     end
     local fh = assert(io.open(outdir .. "/" .. name .. ".json", "w"))
@@ -59,39 +46,62 @@ local function stack(game, cards)
     game.shoe.pos = 1
 end
 
--- 1: window just opened, no game.
-ns.UI:Show()
-dump("1-empty")
+local room = W.NewRoom()
+local thrall = room:Player("Thrall")
+local patrick = room:Player("Patrick")
+local jaina = room:Player("Jaina")
+local host, me = thrall.ns, patrick.ns
 
--- 2: three players; Thrall split and doubled, Jaina has blackjack, Patrick to act.
-ns.game = ns.Game.New({ onEvent = function(e, d)
-    for _, fn in ipairs(ns.listeners) do fn(e, d) end
-end })
-for _, n in ipairs({ "Thrall", "Patrick", "Jaina" }) do ns.game:AddPlayer(n) end
-ns.game:Start()
-stack(ns.game, { "8S", "TD", "AS", "9H", "8H", "6C", "KD", "7C", "3D", "KC", "9S", "5S" })
-ns.game:PlaceBet("Thrall", 10); ns.game:PlaceBet("Jaina", 6)
-ns.UI.pending = 10
-ns.UI.frame.placeBet:Click()
-ns.game:Act("Thrall", "split")
-ns.game:Act("Thrall", "double")
-ns.game:Act("Thrall", "stand")
-dump("2-your-turn")
+-- 1: Thrall opened a table and invited two friends who haven't answered yet.
+host.UI:Show()
+host.UI.frame.newGame:Click()
+host.Invite("Patrick")
+host.Invite("Jaina")
+room:Run(0.5)
+dump(thrall, "1-lobby")
+
+-- 2: they joined. Thrall split and doubled, Jaina has blackjack, and it's
+-- Patrick's turn, seen from Patrick's own window.
+patrick:AnswerPopup(true)
+jaina:AnswerPopup(true)
+room:Run(0.5)
+me.UI:Show()
+host.UI.frame.start:Click()
+room:Run(0.5)
+stack(host.game, { "8S", "TD", "AS", "9H", "8H", "6C", "KD", "7C", "3D", "KC", "9S", "5S" })
+host.Bet(10)
+jaina.ns.Bet(6)
+me.UI.pending = 10
+me.UI.frame.placeBet:Click()
+room:Run(1)
+host.Act("split"); room:Run(1)
+host.Act("double"); room:Run(1)
+host.Act("stand"); room:Run(1)
+dump(patrick, "2-your-turn")
 
 -- 3: Patrick hits to 21; the dealer plays out and the round is settled.
-ns.UI.frame.actions.hit:Click()
-dump("3-results")
+me.UI.frame.actions.hit:Click()
+room:Run(5)
+dump(patrick, "3-results")
 
--- 4: Dealer shows an ace and offers insurance.
-stack(ns.game, { "9S", "TD", "4C", "AH", "9D", "8C", "7S", "KH" })
-ns.game:PlaceBet("Thrall", 10); ns.game:PlaceBet("Jaina", 6)
-ns.UI.frame.placeBet:Click()
-dump("4-insurance")
--- 5: a fresh solo game where Patrick busts.
-ns.game:Close()
-ns.UI.frame.newGame:Click()
-stack(ns.game, { "TS", "9C", "6H", "TD", "KS" })
-ns.UI.frame.placeBet:Click()
-ns.UI.frame.actions.hit:Click()
-dump("5-bust")
+-- 4: the dealer shows an ace and offers insurance.
+stack(host.game, { "9S", "TD", "4C", "AH", "9D", "8C", "7S", "KH" })
+host.Bet(10)
+jaina.ns.Bet(6)
+me.UI.pending = 10
+me.UI.frame.placeBet:Click()
+room:Run(3)
+dump(patrick, "4-insurance")
+
+-- 5: a solo game where Valeera busts.
+local valeera = room:Player("Valeera")
+valeera.ns.UI:Show()
+valeera.ns.UI.frame.newGame:Click()
+valeera.ns.UI.frame.start:Click()
+stack(valeera.ns.game, { "TS", "9C", "6H", "TD", "KS" })
+valeera.ns.UI.pending = 10
+valeera.ns.UI.frame.placeBet:Click()
+valeera.ns.UI.frame.actions.hit:Click()
+room:Run(0.5)
+dump(valeera, "5-bust")
 print("wrote previews to " .. outdir)
