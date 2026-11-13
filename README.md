@@ -44,7 +44,7 @@ The owner's client runs the game and sends each player the table through hidden 
 
 ## Play solo
 
-Type `/f21` to open the table window and press **New Game**, then **Start Game** without inviting anyone. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. After each round a banner shows whether you won, lost, pushed, or busted and by how many chips, and every seat is outlined green, red, or yellow with its chips won or lost. Sound effects play for cards, bets, your turn, and results; turn them off with the **Sound** button or `/f21 sound`. Drag the window to move it; Escape closes it.
+Type `/f21` to open the table window and press **New Game**, then **Start Game** without inviting anyone. Set your bet with **-** and **+** (2 chips a step), type an amount in the box, or press **Max**, then press **Place Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. After each round a banner shows whether you won, lost, pushed, or busted and by how many chips, and every seat is outlined green, red, or yellow with its chips won or lost. Sound effects play for cards, bets, your turn, and results; turn them off with the **Sound** button or `/f21 sound`. Drag the window to move it; Escape closes it.
 
 Everything also works from chat:
 

@@ -29,6 +29,8 @@ for path in sorted(glob.glob(os.path.join(out, "*.json"))):
             d.rounded_rectangle(r, radius=6, fill=(120, 16, 10, 255) if en else (70, 50, 50, 255), outline=(30, 10, 5, 255), width=2)
         elif it.get("input"):
             d.rounded_rectangle(r, radius=4, fill=(10, 10, 10, 255), outline=(150, 150, 150, 255), width=2)
+            if it.get("text"):
+                d.text(((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), it["text"], font=ImageFont.truetype(FONT, 12 * SCALE), fill="white", anchor="mm")
         elif it.get("close"):
             d.rounded_rectangle(r, radius=6, fill=(140, 20, 10, 255))
             d.text(((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), "X", font=ImageFont.truetype(FONT, 22), fill="white", anchor="mm")

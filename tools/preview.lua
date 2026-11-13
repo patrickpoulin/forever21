@@ -30,7 +30,7 @@ local function dump(player, name)
         local r = it.r
         items[#items + 1] = {
             kind = r.kind, rect = it.rect, fill = r.fill, path = r.path, tint = r.tint,
-            text = r.kind == "FontString" and r.text or nil, color = r.color, font = r.font,
+            text = (r.kind == "FontString" or r.template == "InputBoxTemplate") and r.text or nil, color = r.color, font = r.font,
             button = r.button, close = r.closeButton, input = r.template == "InputBoxTemplate" or nil, enabled = r.enabled,
         }
     end
@@ -71,7 +71,7 @@ room:Run(0.5)
 stack(host.game, { "8S", "TD", "AS", "9H", "8H", "6C", "KD", "7C", "3D", "KC", "9S", "5S" })
 host.Bet(10)
 jaina.ns.Bet(6)
-me.UI.pending = 10
+me.UI:SetBet(10)
 me.UI.frame.placeBet:Click()
 room:Run(1)
 host.Act("split"); room:Run(1)
@@ -88,7 +88,7 @@ dump(patrick, "3-results")
 stack(host.game, { "9S", "TD", "4C", "AH", "9D", "8C", "7S", "KH" })
 host.Bet(10)
 jaina.ns.Bet(6)
-me.UI.pending = 10
+me.UI:SetBet(10)
 me.UI.frame.placeBet:Click()
 room:Run(3)
 dump(patrick, "4-insurance")
@@ -99,7 +99,7 @@ valeera.ns.UI:Show()
 valeera.ns.UI.frame.newGame:Click()
 valeera.ns.UI.frame.start:Click()
 stack(valeera.ns.game, { "TS", "9C", "6H", "TD", "KS" })
-valeera.ns.UI.pending = 10
+valeera.ns.UI:SetBet(10)
 valeera.ns.UI.frame.placeBet:Click()
 valeera.ns.UI.frame.actions.hit:Click()
 room:Run(0.5)
