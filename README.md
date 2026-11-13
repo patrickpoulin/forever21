@@ -10,6 +10,15 @@ Milestone 1 of 5: the rules engine and solo play from chat commands. The table w
 
 ## Install
 
+### With WowUp
+
+1. In WowUp, pick your WoW Forever client, then go to **Get Addons** and choose **Install from URL**.
+2. Paste `https://github.com/patrickpoulin/forever21` and install.
+
+WowUp installs the latest GitHub release. A new release is published automatically whenever `main` has a new `## Version:` in `Forever21/Forever21.toc`.
+
+### By hand
+
 1. Copy the `Forever21` folder into `World of Warcraft/Interface/AddOns/` in your WoW Forever install.
 2. Restart the game or type `/reload`.
 3. Check it loaded with `/f21 api`.
