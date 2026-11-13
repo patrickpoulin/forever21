@@ -1,4 +1,5 @@
--- Commands.lua: game actions shared by the window and /f21, plus chat output.
+-- Commands.lua: the event bus, chat output, and /f21 slash commands.
+-- The actions the commands call (ns.Bet, ns.Act, ...) live in Table.lua.
 local _, ns = ...
 local Cards = ns.Cards
 
@@ -7,8 +8,8 @@ ns.listeners = {}
 function ns.Listen(fn)
     ns.listeners[#ns.listeners + 1] = fn
 end
-local function dispatch(event, data)
-    for _, fn in ipairs(ns.listeners) do fn(event, data) end
+function ns.Dispatch(event, data)
+    for _, fn in ipairs(ns.listeners) do fn(event, data or {}) end
 end
 
 local function cardList(cards)
@@ -44,7 +45,6 @@ end)
 -- Turns game events into chat lines. On by default; /f21 chat toggles it.
 local function onEvent(event, d)
     if ns.db and ns.db.chat == false then return end
-    local game = ns.game
     local P = ns.Print
     if event == "started" then
         P(("Game started. Everyone has %d chips. Bet with /f21 bet <2-24, even>."):format(d.chips))
@@ -57,7 +57,7 @@ local function onEvent(event, d)
     elseif event == "dealerCard" then
         if d.hidden then
             P("Dealer: [hidden card]")
-        elseif game and #game.dealer.cards > 2 then
+        elseif (d.index or 0) > 2 then
             P("Dealer draws " .. Cards.Short(d.card) .. ".")
         else
             P("Dealer shows " .. Cards.Short(d.card) .. ".")
@@ -102,63 +102,30 @@ local function onEvent(event, d)
         else
             P("Game over.")
         end
+    elseif event == "seated" then
+        if d.name ~= ns.PlayerName() then P(d.name .. " joined the table.") end
+    elseif event == "inviteSent" then
+        P(("Invited %s. Waiting for an answer..."):format(d.name))
+    elseif event == "declined" then
+        P(d.why or (d.name .. " declined the invite."))
+    elseif event == "inviteExpired" then
+        P(d.name .. " didn't answer. They may not have Forever21 installed.")
+    elseif event == "invited" then
+        P(d.name .. " invites you to play blackjack. /f21 accept or /f21 decline")
+    elseif event == "inviteMismatch" then
+        P(("%s invited you, but has Forever21 %s and you have %s."):format(d.name, d.theirs, ns.VERSION))
+    elseif event == "joining" then
+        P("Joining " .. d.name .. "'s table...")
+    elseif event == "denied" then
+        P("|cffff5555" .. (d.why or "Couldn't join the table.") .. "|r")
+    elseif event == "timedOut" then
+        P(d.name .. " ran out of time and stands.")
+    elseif event == "error" then
+        P("|cffff5555" .. d.message .. "|r")
     end
 end
 
 ns.Listen(onEvent)
-
----------------------------------------------------------------------------
--- Actions. Each returns true, or nil plus a reason a player can read.
----------------------------------------------------------------------------
-
-function ns.IsPlaying()
-    return ns.game ~= nil and ns.game.phase ~= "over"
-end
-
-function ns.StartSolo()
-    if ns.IsPlaying() then return nil, "A game is already running. Quit it first." end
-    ns.game = ns.Game.New({ onEvent = dispatch })
-    ns.game:AddPlayer(ns.PlayerName())
-    dispatch("newGame", {})
-    return ns.game:Start()
-end
-
-local function needGame()
-    if not ns.IsPlaying() then return nil, "No game running. Start one with /f21 solo." end
-    return true
-end
-
--- Places the bet and deals once every seated player has bet.
-function ns.Bet(amount)
-    local ok, err = needGame()
-    if not ok then return nil, err end
-    ok, err = ns.game:PlaceBet(ns.PlayerName(), amount)
-    if not ok then return nil, err end
-    if ns.game:AllBetsIn() then return ns.game:Deal() end
-    return true
-end
-
-function ns.Act(action)
-    local ok, err = needGame()
-    if not ok then return nil, err end
-    return ns.game:Act(ns.PlayerName(), action)
-end
-
-function ns.Insure(take)
-    local ok, err = needGame()
-    if not ok then return nil, err end
-    return ns.game:Insure(ns.PlayerName(), take)
-end
-
-function ns.Quit()
-    local ok, err = needGame()
-    if not ok then return nil, err end
-    return ns.game:RemovePlayer(ns.PlayerName())
-end
-
-function ns.MySeat()
-    return ns.game and ns.game:FindSeat(ns.PlayerName())
-end
 
 ---------------------------------------------------------------------------
 -- Slash commands
@@ -170,12 +137,16 @@ end
 
 local HELP = {
     "/f21 - show or hide the table window",
+    "/f21 host - open a table, then invite players",
+    "/f21 invite <name> - invite a player (or your target)",
+    "/f21 start - start the game (with whoever has joined)",
+    "/f21 accept, decline - answer an invite",
     "/f21 solo - play a solo game against the dealer",
     "/f21 bet <amount> - bet an even amount from 2 to 24",
     "/f21 hit, stand, double, split - play your hand",
     "/f21 insure, noinsure - answer the insurance offer",
     "/f21 chips - show your chips",
-    "/f21 quit - leave the game",
+    "/f21 quit - leave the table (the owner leaving closes it)",
     "/f21 sound - turn sound effects on or off",
     "/f21 chat - turn chat messages on or off",
     "/f21 stats - your games and hands played",
@@ -191,6 +162,21 @@ handlers.solo = function()
     report(ns.StartSolo())
     if ns.UI then ns.UI:Show() end
 end
+handlers.host = function()
+    report(ns.HostTable())
+    if ns.UI then ns.UI:Show() end
+end
+handlers.invite = function(arg)
+    report(ns.Invite(arg))
+    if ns.UI then ns.UI:Show() end
+end
+handlers.start = function() report(ns.StartGame()) end
+handlers.accept = function()
+    local ok, err = ns.AcceptInvite()
+    report(ok, err)
+    if ok and ns.UI then ns.UI:Show() end
+end
+handlers.decline = function() report(ns.DeclineInvite()) end
 handlers.bet = function(arg) report(ns.Bet(tonumber(arg))) end
 for _, action in ipairs({ "hit", "stand", "double", "split" }) do
     handlers[action] = function() report(ns.Act(action)) end
@@ -199,7 +185,7 @@ handlers.insure = function() report(ns.Insure(true)) end
 handlers.noinsure = function() report(ns.Insure(false)) end
 handlers.chips = function()
     local seat = ns.MySeat()
-    if not ns.IsPlaying() or not seat then return report(needGame()) end
+    if not ns.IsPlaying() or not seat then return report(nil, "No game running.") end
     ns.Print(("You have %d chips."):format(seat.chips))
 end
 handlers.quit = function() report(ns.Quit()) end

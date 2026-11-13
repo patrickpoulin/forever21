@@ -10,7 +10,7 @@ _Approximate render from `tools/preview.lua`; fonts and buttons look like WoW's 
 
 ## Status
 
-Milestone 2 of 5: the table window, sound effects, and solo play against the dealer. Invites and multiplayer come in milestone 3.
+Milestone 3 of 5: multiplayer tables with invites, on top of the table window, sound effects, and solo play.
 
 ## Install
 
@@ -27,21 +27,40 @@ WowUp installs the latest GitHub release. A new release is published automatical
 2. Restart the game or type `/reload`.
 3. Check it loaded with `/f21 api`.
 
+## Play with friends
+
+Everyone at the table needs Forever21 installed, and the same version. Nobody has to be in your party.
+
+1. Type `/f21` and press **New Game**. You own the table and run the dealer.
+2. Type a player's name in the box and press **Invite** (leave it blank to invite your target), or use `/f21 invite <name>`. Invite up to 4 players.
+3. They get a popup and press **Accept**. Invites expire after 60 seconds.
+4. Press **Start Game** when everyone is in. Anyone who hasn't answered yet is dropped.
+
+![Lobby preview](docs/lobby-preview.png)
+
+Each round everyone has 20 seconds to bet, 15 seconds to answer insurance, and 30 seconds per turn. A player who runs out of time sits the round out, declines insurance, or stands. A player who drops below 2 chips is told they lose and stays at the table to watch. The game ends when one player has chips left, when everyone else leaves, or when the owner presses **Close Table**.
+
+The owner's client runs the game and sends each player the table through hidden addon whispers, so the table stops if the owner logs out or reloads. Press **Leave** to clear it from your window.
+
 ## Play solo
 
-Type `/f21` to open the table window and press **New Game**. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. After each round a banner shows whether you won, lost, pushed, or busted and by how many chips, and every seat is outlined green, red, or yellow with its chips won or lost. Sound effects play for cards, bets, your turn, and results; turn them off with the **Sound** button or `/f21 sound`. Drag the window to move it; Escape closes it.
+Type `/f21` to open the table window and press **New Game**, then **Start Game** without inviting anyone. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. After each round a banner shows whether you won, lost, pushed, or busted and by how many chips, and every seat is outlined green, red, or yellow with its chips won or lost. Sound effects play for cards, bets, your turn, and results; turn them off with the **Sound** button or `/f21 sound`. Drag the window to move it; Escape closes it.
 
 Everything also works from chat:
 
 | Command | What it does |
 | --- | --- |
 | `/f21` | Show or hide the table window |
+| `/f21 host` | Open a table you own |
+| `/f21 invite <name>` | Invite a player (or your target) to your table |
+| `/f21 start` | Start the game with everyone who has joined |
+| `/f21 accept`, `/f21 decline` | Answer an invite |
 | `/f21 solo` | Start a solo game with 100 chips |
 | `/f21 bet <amount>` | Bet an even amount from 2 to 24 |
 | `/f21 hit`, `/f21 stand`, `/f21 double`, `/f21 split` | Play your hand |
 | `/f21 insure`, `/f21 noinsure` | Answer the insurance offer when the dealer shows an ace |
 | `/f21 chips` | Show your chips |
-| `/f21 quit` | Leave the game |
+| `/f21 quit` | Leave the game (the owner closes the table) |
 | `/f21 sound` | Turn sound effects on or off |
 | `/f21 chat` | Turn the chat messages on or off |
 | `/f21 stats` | Your games and hands played |
@@ -63,7 +82,7 @@ busted        # run the tests in spec/
 luacheck .    # lint
 ```
 
-GitHub Actions runs both on every push and pull request. `spec/ui_spec.lua` loads the whole addon on a stubbed game API (`tools/wowstub.lua`) and plays a round through the window's buttons.
+GitHub Actions runs both on every push and pull request. `tools/wowstub.lua` stubs the game API and can load several copies of the addon as different players in one simulated room, with a fake clock and a fake whisper channel. `spec/ui_spec.lua` plays solo rounds through the window's buttons, and `spec/multiplayer_spec.lua` plays tables of up to 5 players, including invites, timeouts, and leaving.
 
 To render approximate screenshots of the window outside the game:
 

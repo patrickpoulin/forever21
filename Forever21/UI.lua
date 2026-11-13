@@ -3,14 +3,14 @@
 local addonName, ns = ...
 local Cards = ns.Cards
 
-local UI = { roundNet = {} }
+local UI = {}
 ns.UI = UI
 
 local MEDIA = "Interface\\AddOns\\" .. addonName .. "\\Media\\"
-local WIDTH, HEIGHT = 720, 480
+local WIDTH, HEIGHT = 640, 400
 local CARD_W, CARD_H = 40, 56
 local CARD_STEP = 16 -- how far each card overlaps the one before
-local SEAT_W, SEAT_H, SEAT_GAP = 134, 196, 6
+local SEAT_W, SEAT_H, SEAT_GAP = 118, 140, 6
 
 local SUIT_TEXTURE = { S = "SuitSpade", H = "SuitHeart", D = "SuitDiamond", C = "SuitClub" }
 local RED = { 0.78, 0.08, 0.1 }
@@ -165,27 +165,31 @@ local function CreateSeat(parent, index)
     s.ring = texture(s, "ARTWORK")
     s.ring:SetTexture(MEDIA .. "Ring")
     s.ring:SetVertexColor(1, 1, 1, 0.45)
-    s.ring:SetSize(30, 30)
-    s.ring:SetPoint("BOTTOM", 0, 6)
+    s.ring:SetSize(24, 24)
+    s.ring:SetPoint("BOTTOMRIGHT", -6, 6)
     s.chip = texture(s, "OVERLAY")
     s.chip:SetTexture(MEDIA .. "Chip")
-    s.chip:SetSize(26, 26)
+    s.chip:SetSize(20, 20)
     s.chip:SetPoint("CENTER", s.ring)
-    s.bet = text(s, "GameFontHighlightSmall", "LEFT", 6, 0, s.ring, "RIGHT")
+    s.bet = text(s, "GameFontHighlightSmall", "RIGHT", -4, 0, s.ring, "LEFT")
     return s
 end
 
--- Lays out up to 4 hands; split hands shrink so they fit in the seat.
+-- Lays out up to 4 hands; split hands shrink so they fit in the seat:
+-- two hands stack, three or four go in a 2 x 2 grid.
 local function ShowSeatHands(s, hands, current)
     local n = #hands
-    local scale = (n >= 3) and 0.6 or (n == 2 and 0.8 or 1)
+    local scale = (n >= 3) and 0.55 or (n == 2 and 0.65 or 1)
     local rowH = (CARD_H + 16) * scale
+    local colW = (SEAT_W - 8) / 2
     for h, frame in ipairs(s.hands) do
         local hand = hands[h]
         if hand then
             frame:SetScale(scale)
             frame:ClearAllPoints()
-            frame:SetPoint("TOPLEFT", s, "TOPLEFT", 10 / scale, (-40 - (h - 1) * rowH) / scale)
+            local row, col = h - 1, 0
+            if n >= 3 then row, col = math.floor((h - 1) / 2), (h - 1) % 2 end
+            frame:SetPoint("TOPLEFT", s, "TOPLEFT", (6 + col * colW) / scale, (-40 - row * rowH) / scale)
             ShowHand(frame, hand.cards)
             local marker = (current == h and n > 1) and "> " or ""
             frame.total:SetText(marker .. TotalText(hand.cards))
@@ -250,15 +254,15 @@ function UI:Create()
     SetCard(f.shoe, nil)
     f.shoeText = text(f, "GameFontDisableSmall", "TOP", 0, -4, f.shoe, "BOTTOM")
 
-    f.rules = text(f, "GameFontDisableSmall", "TOP", 0, -150)
+    f.rules = text(f, "GameFontDisableSmall", "TOP", 0, -142)
     f.rules:SetText("BLACKJACK PAYS 3 TO 2  -  DEALER STANDS ON ALL 17s  -  INSURANCE PAYS 2 TO 1")
-    f.status = text(f, "GameFontHighlight", "TOP", 0, -172)
+    f.status = text(f, "GameFontHighlight", "TOP", 0, -162)
 
     -- Result banner across the middle of the table.
     local banner = CreateFrame("Frame", nil, f)
     f.banner = banner
-    banner:SetSize(460, 64)
-    banner:SetPoint("TOP", 0, -134)
+    banner:SetSize(440, 60)
+    banner:SetPoint("TOP", 0, -132)
     banner:SetFrameLevel(f:GetFrameLevel() + 20)
     banner.bg = texture(banner, "BACKGROUND", 0, 0, 0, 0.78)
     banner.bg:SetAllPoints()
@@ -313,9 +317,24 @@ function UI:Create()
     f.insureYes:SetPoint("RIGHT", f.insureNo, "LEFT", -4, 0)
 
     f.newGame = button(f, "New Game", 96, function()
-        UI:Report(ns.StartSolo())
+        UI:Report(ns.HostTable())
     end)
     f.newGame:SetPoint("BOTTOM", 0, 22)
+
+    -- Lobby (owner only): type a name to invite, then Start.
+    f.inviteBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    f.inviteBox:SetSize(140, 22)
+    f.inviteBox:SetPoint("BOTTOMLEFT", 24, 23)
+    f.inviteBox:SetAutoFocus(false)
+    f.inviteBox:SetMaxLetters(24)
+    f.inviteBox:SetScript("OnEnterPressed", function() UI:InviteFromBox() end)
+    f.inviteBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+    f.inviteHint = text(f, "GameFontDisableSmall", "BOTTOMLEFT", 0, 4, f.inviteBox, "TOPLEFT")
+    f.inviteHint:SetText("Player name (blank = your target)")
+    f.invite = button(f, "Invite", 64, function() UI:InviteFromBox() end)
+    f.invite:SetPoint("LEFT", f.inviteBox, "RIGHT", 6, 0)
+    f.start = button(f, "Start Game", 100, function() UI:Report(ns.StartGame()) end)
+    f.start:SetPoint("BOTTOMRIGHT", -16, 22)
     f.leave = button(f, "Leave", 64, function() UI:Report(ns.Quit()) end)
     f.leave:SetPoint("TOPLEFT", 14, -12)
     f.soundToggle = button(f, "Sound: On", 88, function()
@@ -325,7 +344,25 @@ function UI:Create()
     f.soundToggle:SetPoint("TOPRIGHT", -40, -12)
 
     self.pending = 10
+    -- Keeps the countdown in the status line ticking.
+    local elapsed = 0
+    f:SetScript("OnUpdate", function(_, dt)
+        elapsed = elapsed + (dt or 0)
+        if elapsed >= 0.5 then
+            elapsed = 0
+            if ns.Table.SecondsLeft() then UI:Refresh() end
+        end
+    end)
     f:Hide()
+end
+
+function UI:InviteFromBox()
+    local box = self.frame.inviteBox
+    local name = (box:GetText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local ok, err = ns.Invite(name)
+    if ok then box:SetText("") end
+    box:ClearFocus()
+    self:Report(ok, err)
 end
 
 function UI:Show()
@@ -376,23 +413,6 @@ end
 ---------------------------------------------------------------------------
 -- Drawing the game
 ---------------------------------------------------------------------------
-
--- Copies what's on the table so a finished round stays visible until the
--- next deal (the game itself clears it as soon as betting reopens).
-local function Snapshot(game)
-    local snap = { dealer = {}, seats = {} }
-    for i, c in ipairs(game.dealer.cards) do snap.dealer[i] = c end
-    for i, seat in ipairs(game.seats) do
-        local hands = {}
-        for h, hand in ipairs(seat.hands) do
-            local cards = {}
-            for k, c in ipairs(hand.cards) do cards[k] = c end
-            hands[h] = { cards = cards, result = hand.result, bust = hand.bust, bet = hand.bet, payout = hand.payout }
-        end
-        snap.seats[i] = hands
-    end
-    return snap
-end
 
 local BANNER_COLORS = {
     win = { 0.3, 1, 0.3 }, lose = { 1, 0.3, 0.3 }, push = { 1, 1, 0.5 }, gold = { 1, 0.82, 0.2 },
@@ -449,16 +469,32 @@ end
 -- Events update the status line and the round snapshot, then redraw.
 function UI:OnEvent(event, d)
     local me = ns.PlayerName()
-    if event == "newGame" then
-        self.snapshot, self.message, self.error = nil, nil, nil
-        self.roundNet = {}
+    if event == "newGame" or event == "leftTable" then
+        self.message, self.error = nil, nil
         self:HideBanner()
+    elseif event == "seated" and d.name ~= me then
+        self.message = d.name .. " joined the table."
+    elseif event == "inviteSent" then
+        self.message = "Invited " .. d.name .. ". Waiting for an answer..."
+    elseif event == "declined" then
+        self.message = d.why or (d.name .. " declined.")
+    elseif event == "inviteExpired" then
+        self.message = d.name .. " didn't answer. Do they have Forever21?"
+    elseif event == "joining" then
+        self.message = "Joining " .. d.name .. "'s table..."
+    elseif event == "denied" then
+        self.error = d.why or "Couldn't join the table."
+    elseif event == "error" then
+        self.error = d.message
+    elseif event == "timedOut" then
+        self.message = (d.name == me) and "You ran out of time and stand." or (d.name .. " ran out of time and stands.")
+    elseif event == "started" then
+        self.message, self.error = nil, nil
     elseif event == "betting" then
         local seat = ns.MySeat()
         if seat and not seat.out and not self.message then self.message = "Place your bet." end
     elseif event == "dealing" then
-        self.snapshot, self.message, self.error = nil, nil, nil
-        self.roundNet = {}
+        self.message, self.error = nil, nil
         self:HideBanner()
     elseif event == "insuranceOffered" then
         self.message = "Dealer shows an ace. Insurance?"
@@ -472,8 +508,6 @@ function UI:OnEvent(event, d)
     elseif event == "dealerDone" then
         self.message = d.bust and ("Dealer busts with %d."):format(d.total) or ("Dealer stands on %d."):format(d.total)
     elseif event == "result" then
-        self.snapshot = Snapshot(ns.game)
-        self.roundNet[d.name] = ns.NetResult(d)
         if d.name == me then
             self.message = MyResultText(d)
             self:ShowResult(d)
@@ -510,14 +544,24 @@ function UI:Refresh()
     local me = ns.PlayerName()
     local mySeat = ns.MySeat()
 
-    -- Status line
+    local host = ns.IsHost()
+    local lobby = playing and game.phase == "lobby"
+
+    -- Status line, with the countdown when a timer is running.
+    local status
     if self.error then
-        f.status:SetText("|cffff6060" .. self.error .. "|r")
+        status = "|cffff6060" .. self.error .. "|r"
     elseif not game then
-        f.status:SetText("Press New Game to play against the dealer.")
+        status = self.message or "Press New Game to open a table."
+    elseif lobby and not self.message then
+        status = host and "Invite players, then press Start Game. Start alone to play solo."
+            or ("Waiting for " .. (game.host or ns.hostName or "the owner") .. " to start the game...")
     else
-        f.status:SetText(self.message or "")
+        status = self.message or ""
     end
+    local left = ns.Table.SecondsLeft()
+    if left and not self.error then status = status .. ("  (%ds)"):format(left) end
+    f.status:SetText(status)
     local banner = self.bannerShown and not self.error
     f.banner:SetShown(banner)
     f.rules:SetShown(not banner)
@@ -525,7 +569,7 @@ function UI:Refresh()
     f.soundToggle:SetText(ns.db.sound == false and "Sound: Off" or "Sound: On")
 
     -- Which round to draw: the live one, or the last one until the next deal.
-    local snap = game and (game.phase == "betting" or game.phase == "over") and self.snapshot
+    local snap = game and (game.phase == "betting" or game.phase == "over") and game.lastRound
     local dealerCards = snap and snap.dealer or (game and game.dealer.cards) or {}
     local hidden = game and (game.phase == "insurance" or game.phase == "players") and not snap
     ShowHand(f.dealer, dealerCards, hidden and 2 or nil)
@@ -538,8 +582,7 @@ function UI:Refresh()
     end
 
     if game then
-        local left = #game.shoe.cards - game.shoe.pos + 1
-        f.shoeText:SetText(("%d cards"):format(left))
+        f.shoeText:SetText(("%d cards"):format(game:CardsLeft()))
     else
         f.shoeText:SetText("")
     end
@@ -551,7 +594,7 @@ function UI:Refresh()
         -- Gold border on whoever is acting; after a round, green, red, or
         -- yellow by how each seat did, with the chips won or lost.
         local acting = seat ~= nil and current ~= nil and game.phase == "players" and current.seat == i
-        local net = snap and seat and self.roundNet[seat.name]
+        local net = (snap and seat and snap.nets and snap.nets[seat.name]) or nil
         if acting then
             s.glow:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.9)
         elseif net then
@@ -566,14 +609,15 @@ function UI:Refresh()
         end
         if seat then
             local isMe = seat.name == me
-            s.name:SetText(isMe and (seat.name .. " (you)") or seat.name)
+            local owner = (game.host or (host and me)) == seat.name
+            s.name:SetText(seat.name .. (isMe and " (you)" or "") .. (owner and #game.seats > 1 and " *" or ""))
             if seat.out then
                 s.name:SetTextColor(0.5, 0.5, 0.5)
             else
                 s.name:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
             end
-            s.chips:SetText(("%d chips"):format(seat.chips))
-            local hands = snap and snap.seats[i] or seat.hands
+            s.chips:SetText(lobby and "" or ("%d chips"):format(seat.chips))
+            local hands = snap and snap.seats and snap.seats[i] or seat.hands
             ShowSeatHands(s, hands, current and current.seat == i and current.hand or nil)
             local bet = seat.bet
             if game.phase ~= "betting" and game.phase ~= "over" then
@@ -587,6 +631,8 @@ function UI:Refresh()
                 s.status:SetText("Left")
             elseif seat.out then
                 s.status:SetText("OUT")
+            elseif lobby then
+                s.status:SetText("Ready")
             elseif #hands == 0 and game.phase == "betting" then
                 s.status:SetText(seat.bet > 0 and "" or "Betting...")
             else
@@ -595,7 +641,8 @@ function UI:Refresh()
         else
             s.name:SetText("")
             s.chips:SetText("")
-            s.status:SetText("Empty seat")
+            local invited = lobby and ns.Table.InviteList()[i - #game.seats]
+            s.status:SetText(invited and ("Invited:\n" .. invited) or "Empty seat")
             ShowSeatHands(s, {})
             s.chip:Hide()
             s.ring:Hide()
@@ -628,6 +675,17 @@ function UI:Refresh()
         b:SetEnabled(allowed[action] == true)
     end
 
-    f.newGame:SetShown(not playing)
-    f.leave:SetShown(playing)
+    for _, b in pairs(f.actions) do
+        if lobby then b:Hide() end
+    end
+    f.inviteBox:SetShown(lobby and host)
+    f.inviteHint:SetShown(lobby and host)
+    f.invite:SetShown(lobby and host)
+    f.start:SetShown(lobby and host)
+
+    f.newGame:SetShown(not playing and ns.role ~= "client")
+    f.leave:SetShown(playing or ns.role == "client")
+    local closes = host and game and #game.seats > 1
+    f.leave:SetText(closes and "Close Table" or "Leave")
+    f.leave:SetWidth(closes and 96 or 64)
 end
