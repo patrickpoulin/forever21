@@ -10,7 +10,7 @@ _Approximate render from `tools/preview.lua`; fonts and buttons look like WoW's 
 
 ## Status
 
-Milestone 2 of 5: the table window and solo play against the dealer. Invites and multiplayer come in milestone 3.
+Milestone 2 of 5: the table window, sound effects, and solo play against the dealer. Invites and multiplayer come in milestone 3.
 
 ## Install
 
@@ -29,7 +29,7 @@ WowUp installs the latest GitHub release. A new release is published automatical
 
 ## Play solo
 
-Type `/f21` to open the table window and press **New Game**. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. Drag the window to move it; Escape closes it.
+Type `/f21` to open the table window and press **New Game**. Click chips (2, 4, 10) to build your bet, then **Bet** to deal. Play with **Hit**, **Stand**, **Double**, and **Split**, and answer **Insure** or **No Insurance** when the dealer shows an ace. After each round a banner shows whether you won, lost, pushed, or busted and by how many chips, and every seat is outlined green, red, or yellow with its chips won or lost. Sound effects play for cards, bets, your turn, and results; turn them off with the **Sound** button or `/f21 sound`. Drag the window to move it; Escape closes it.
 
 Everything also works from chat:
 
@@ -42,6 +42,7 @@ Everything also works from chat:
 | `/f21 insure`, `/f21 noinsure` | Answer the insurance offer when the dealer shows an ace |
 | `/f21 chips` | Show your chips |
 | `/f21 quit` | Leave the game |
+| `/f21 sound` | Turn sound effects on or off |
 | `/f21 chat` | Turn the chat messages on or off |
 | `/f21 stats` | Your games and hands played |
 | `/f21 api` | Show the version and which addon-message API this client has |

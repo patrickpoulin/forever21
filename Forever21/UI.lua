@@ -3,7 +3,7 @@
 local addonName, ns = ...
 local Cards = ns.Cards
 
-local UI = {}
+local UI = { roundNet = {} }
 ns.UI = UI
 
 local MEDIA = "Interface\\AddOns\\" .. addonName .. "\\Media\\"
@@ -107,7 +107,7 @@ local function CreateHand(parent)
     hand:SetSize(CARD_W, CARD_H)
     hand.cards = {}
     hand.total = text(hand, "GameFontHighlightSmall", "LEFT", 4, 0, hand, "RIGHT")
-    hand.result = text(hand, "GameFontNormalSmall", "TOPLEFT", 0, -2, hand, "BOTTOMLEFT")
+    hand.result = text(hand, "GameFontNormal", "TOPLEFT", 0, -2, hand, "BOTTOMLEFT")
     return hand
 end
 
@@ -154,6 +154,7 @@ local function CreateSeat(parent, index)
     s.bg:SetAllPoints()
     s.name = text(s, "GameFontNormal", "TOP", 0, -6)
     s.chips = text(s, "GameFontHighlightSmall", "TOP", 0, -22)
+    s.delta = text(s, "GameFontNormalSmall", "LEFT", 4, 0, s.chips, "RIGHT")
     s.status = text(s, "GameFontDisableSmall", "CENTER", 0, 10)
 
     s.hands = {}
@@ -253,6 +254,26 @@ function UI:Create()
     f.rules:SetText("BLACKJACK PAYS 3 TO 2  -  DEALER STANDS ON ALL 17s  -  INSURANCE PAYS 2 TO 1")
     f.status = text(f, "GameFontHighlight", "TOP", 0, -172)
 
+    -- Result banner across the middle of the table.
+    local banner = CreateFrame("Frame", nil, f)
+    f.banner = banner
+    banner:SetSize(460, 64)
+    banner:SetPoint("TOP", 0, -134)
+    banner:SetFrameLevel(f:GetFrameLevel() + 20)
+    banner.bg = texture(banner, "BACKGROUND", 0, 0, 0, 0.78)
+    banner.bg:SetAllPoints()
+    banner.top = texture(banner, "BORDER")
+    banner.top:SetPoint("TOPLEFT")
+    banner.top:SetPoint("TOPRIGHT")
+    banner.top:SetHeight(3)
+    banner.bottom = texture(banner, "BORDER")
+    banner.bottom:SetPoint("BOTTOMLEFT")
+    banner.bottom:SetPoint("BOTTOMRIGHT")
+    banner.bottom:SetHeight(3)
+    banner.title = text(banner, "GameFontNormalHuge", "CENTER", 0, 9)
+    banner.sub = text(banner, "GameFontHighlight", "CENTER", 0, -17)
+    banner:Hide()
+
     f.seats = {}
     for i = 1, ns.Rules.DEFAULTS.maxSeats do f.seats[i] = CreateSeat(f, i) end
 
@@ -297,6 +318,11 @@ function UI:Create()
     f.newGame:SetPoint("BOTTOM", 0, 22)
     f.leave = button(f, "Leave", 64, function() UI:Report(ns.Quit()) end)
     f.leave:SetPoint("TOPLEFT", 14, -12)
+    f.soundToggle = button(f, "Sound: On", 88, function()
+        ns.db.sound = not ns.db.sound
+        UI:Refresh()
+    end)
+    f.soundToggle:SetPoint("TOPRIGHT", -40, -12)
 
     self.pending = 10
     f:Hide()
@@ -361,16 +387,55 @@ local function Snapshot(game)
         for h, hand in ipairs(seat.hands) do
             local cards = {}
             for k, c in ipairs(hand.cards) do cards[k] = c end
-            hands[h] = { cards = cards, result = hand.result, bust = hand.bust, bet = hand.bet }
+            hands[h] = { cards = cards, result = hand.result, bust = hand.bust, bet = hand.bet, payout = hand.payout }
         end
         snap.seats[i] = hands
     end
     return snap
 end
 
+local BANNER_COLORS = {
+    win = { 0.3, 1, 0.3 }, lose = { 1, 0.3, 0.3 }, push = { 1, 1, 0.5 }, gold = { 1, 0.82, 0.2 },
+}
+
+function UI:ShowBanner(title, sub, colorKey)
+    local b = self.frame and self.frame.banner
+    if not b then return end
+    local c = BANNER_COLORS[colorKey] or BANNER_COLORS.gold
+    b.title:SetText(title)
+    b.title:SetTextColor(c[1], c[2], c[3])
+    b.sub:SetText(sub or "")
+    b.top:SetColorTexture(c[1], c[2], c[3], 0.9)
+    b.bottom:SetColorTexture(c[1], c[2], c[3], 0.9)
+    self.bannerShown = true
+end
+
+function UI:HideBanner()
+    self.bannerShown = false
+end
+
+local function chipsText(n)
+    return (n == 1 or n == -1) and "chip" or "chips"
+end
+
+-- Big banner for this player's round result.
+function UI:ShowResult(d)
+    local net = ns.NetResult(d)
+    local single = #d.hands == 1 and d.hands[1].result
+    if single == "blackjack" then
+        self:ShowBanner("BLACKJACK!", ("+%d %s"):format(net, chipsText(net)), "gold")
+    elseif net > 0 then
+        self:ShowBanner("YOU WIN!", ("+%d %s"):format(net, chipsText(net)), "win")
+    elseif net < 0 then
+        local busted = single == "lose" and (d.hands[1].total or 0) > 21
+        self:ShowBanner(busted and "BUST - YOU LOSE" or "YOU LOSE", ("%d %s"):format(net, chipsText(net)), "lose")
+    else
+        self:ShowBanner("PUSH", "Your bet comes back.", "push")
+    end
+end
+
 local function MyResultText(d)
-    local net = -(d.insurance or 0) + (d.insurancePaid or 0)
-    for _, r in ipairs(d.hands) do net = net + r.payout - r.bet end
+    local net = ns.NetResult(d)
     if #d.hands == 1 and d.hands[1].result == "blackjack" then
         return ("Blackjack! You win %d."):format(net)
     elseif net > 0 then
@@ -386,16 +451,21 @@ function UI:OnEvent(event, d)
     local me = ns.PlayerName()
     if event == "newGame" then
         self.snapshot, self.message, self.error = nil, nil, nil
+        self.roundNet = {}
+        self:HideBanner()
     elseif event == "betting" then
         local seat = ns.MySeat()
         if seat and not seat.out and not self.message then self.message = "Place your bet." end
     elseif event == "dealing" then
         self.snapshot, self.message, self.error = nil, nil, nil
+        self.roundNet = {}
+        self:HideBanner()
     elseif event == "insuranceOffered" then
         self.message = "Dealer shows an ace. Insurance?"
     elseif event == "dealerPeeked" then
         self.message = "Dealer checked: no blackjack."
     elseif event == "turn" then
+        if d.name == me then self:HideBanner() end
         self.message = (d.name == me) and ("Your turn: " .. TotalText(d.cards)) or ("Waiting for " .. d.name .. "...")
     elseif event == "dealerReveal" and d.blackjack then
         self.message = "Dealer has blackjack."
@@ -403,12 +473,24 @@ function UI:OnEvent(event, d)
         self.message = d.bust and ("Dealer busts with %d."):format(d.total) or ("Dealer stands on %d."):format(d.total)
     elseif event == "result" then
         self.snapshot = Snapshot(ns.game)
-        if d.name == me then self.message = MyResultText(d) end
+        self.roundNet[d.name] = ns.NetResult(d)
+        if d.name == me then
+            self.message = MyResultText(d)
+            self:ShowResult(d)
+        end
+    elseif event == "bust" and d.name == me then
+        self:ShowBanner("BUST", ("%d - over 21"):format(d.total), "lose")
     elseif event == "out" and d.name == me then
         self.message = "You're out of chips. You lose!"
+        self:ShowBanner("OUT OF CHIPS", "You lose the game. You can keep watching.", "lose")
     elseif event == "over" then
         if d.winner then
             self.message = (d.winner == me) and "You win the game!" or (d.winner .. " wins the game!")
+            if d.winner == me then
+                self:ShowBanner("YOU WIN THE GAME!", "Last player with chips.", "gold")
+            else
+                self:ShowBanner(d.winner:upper() .. " WINS", "Game over.", "lose")
+            end
         elseif d.reason == "closed" then
             self.message = "The table was closed."
         elseif not (self.message and self.message:find("You lose")) then
@@ -436,6 +518,11 @@ function UI:Refresh()
     else
         f.status:SetText(self.message or "")
     end
+    local banner = self.bannerShown and not self.error
+    f.banner:SetShown(banner)
+    f.rules:SetShown(not banner)
+    f.status:SetShown(not banner)
+    f.soundToggle:SetText(ns.db.sound == false and "Sound: Off" or "Sound: On")
 
     -- Which round to draw: the live one, or the last one until the next deal.
     local snap = game and (game.phase == "betting" or game.phase == "over") and self.snapshot
@@ -461,7 +548,22 @@ function UI:Refresh()
     local current = game and game.current
     for i, s in ipairs(f.seats) do
         local seat = game and game.seats[i]
-        s.glow:SetShown(seat ~= nil and current ~= nil and game.phase == "players" and current.seat == i)
+        -- Gold border on whoever is acting; after a round, green, red, or
+        -- yellow by how each seat did, with the chips won or lost.
+        local acting = seat ~= nil and current ~= nil and game.phase == "players" and current.seat == i
+        local net = snap and seat and self.roundNet[seat.name]
+        if acting then
+            s.glow:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.9)
+        elseif net then
+            local c = net > 0 and { 0.3, 0.9, 0.3 } or (net < 0 and { 0.9, 0.25, 0.25 } or { 0.9, 0.9, 0.5 })
+            s.glow:SetColorTexture(c[1], c[2], c[3], 0.9)
+        end
+        s.glow:SetShown(acting or net ~= nil)
+        if net and net ~= 0 then
+            s.delta:SetText(net > 0 and ("|cff40ff40+%d|r"):format(net) or ("|cffff5050%d|r"):format(net))
+        else
+            s.delta:SetText("")
+        end
         if seat then
             local isMe = seat.name == me
             s.name:SetText(isMe and (seat.name .. " (you)") or seat.name)

@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 out = sys.argv[1]
 SCALE = 2
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-SIZES = {"GameFontNormal": 12, "GameFontNormalSmall": 10, "GameFontNormalLarge": 16,
+SIZES = {"GameFontNormal": 12, "GameFontNormalSmall": 10, "GameFontNormalLarge": 16, "GameFontNormalHuge": 22,
          "GameFontHighlight": 12, "GameFontHighlightSmall": 10, "GameFontDisableSmall": 10}
 import re
 
